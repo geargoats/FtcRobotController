@@ -62,7 +62,6 @@ public class ConceptTensorFlowObjectDetectionEasy extends LinearOpMode {
      * The variable to store our instance of the vision portal.
      */
     private VisionPortal visionPortal;
-
     @Override
     public void runOpMode() {
 

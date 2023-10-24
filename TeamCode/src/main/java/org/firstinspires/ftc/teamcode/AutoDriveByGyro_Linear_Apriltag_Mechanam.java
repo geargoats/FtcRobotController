@@ -39,10 +39,17 @@ import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
+import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDirection;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.AngularVelocity;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
+import org.firstinspires.ftc.vision.VisionPortal;
+import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+
+import java.util.List;
 
 
 /**
@@ -96,6 +103,17 @@ import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 //@Disabled
 public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
 
+    private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
+    /**
+     * The variable to store our instance of the AprilTag processor.
+     */
+    private AprilTagProcessor aprilTag;
+
+    /**
+     * The variable to store our instance of the vision portal.
+     */
+    private VisionPortal visionPortal;
+
     /* Declare OpMode members. */
     private DcMotor         leftBackDrive   = null;
     private DcMotor         rightBackDrive  = null;
@@ -121,6 +139,8 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
     private int     rightBackTarget   = 0;
     private int     leftFrontTarget    = 0;
     private int     rightFrontTarget   = 0;
+    private static final int DESIRED_TAG_ID = 7;     // Choose the tag you want to approach or set to -1 for ANY tag.
+    private AprilTagDetection desiredTag = null;     // Used to hold the data for a detected AprilTag
 
     // Calculate the COUNTS_PER_INCH for your specific drive train.
     // Go to your motor vendor website to determine your motor's COUNTS_PER_MOTOR_REV
@@ -129,8 +149,8 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
     // This is gearing DOWN for less speed and more torque.
     // For gearing UP, use a gear ratio less than 1.0. Note this will affect the direction of wheel rotation.
     static final double     COUNTS_PER_MOTOR_REV    = 28 ;   // eg: GoBILDA 312 RPM Yellow Jacket
-    static final double     DRIVE_GEAR_REDUCTION    = 20.0 ;     // No External Gearing.
-    static final double     WHEEL_DIAMETER_INCHES   = 2.95276 ;     // For figuring circumference
+    static final double     DRIVE_GEAR_REDUCTION    = 19.2 ;     // No External Gearing.
+    static final double     WHEEL_DIAMETER_INCHES   = 3.77953 ;     // For figuring circumference
     static final double     COUNTS_PER_INCH         = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) /
                                                       (WHEEL_DIAMETER_INCHES * 3.1415);
 
@@ -149,8 +169,23 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
     static final double     P_DRIVE_GAIN           = 0.03;     // Larger is more responsive, but also less stable
 
 
-    @Override
+
+   // @Override
     public void runOpMode() {
+
+        initAprilTag();
+
+        // Wait for the DS start button to be touched.
+        telemetry.addData("DS preview on/off", "3 dots, Camera Stream");
+        telemetry.addData(">", "Touch Play to start OpMode");
+        telemetry.update();
+        if (USE_WEBCAM)
+            setManualExposure(6, 250);  // Use low exposure time to reduce motion blur
+
+        // Wait for driver to press start
+        telemetry.addData("Camera preview on/off", "3 dots, Camera Stream");
+        telemetry.addData(">", "Touch Play to start OpMode");
+        telemetry.update();
 
         // Initialize the drive system variables.
         leftBackDrive  = hardwareMap.get(DcMotor.class, "left_back_drive");
@@ -190,6 +225,8 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
 
         // Wait for the game to start (Display Gyro value while waiting)
         while (opModeInInit()) {
+            // Push telemetry to the Driver Station.
+            telemetry.update();
             telemetry.addData("Hub orientation", "Logo=%s   USB=%s\n ", logoDirection, usbDirection);
             telemetry.addData(">", "Robot Heading = %4.0f", getRawHeading());
             YawPitchRollAngles orientation = imu.getRobotYawPitchRollAngles();
@@ -213,12 +250,16 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
         //          holdHeading() is used after turns to let the heading stabilize
         //          Add a sleep(2000) after any step to keep the telemetry data visible for review
 
+        telemetryAprilTag(); //First Read April tag
 
 
 
-        driveStraight(DRIVE_SPEED, 24.0, 0.0);    // Drive Forward 24"
+
+        driveStraight(DRIVE_SPEED, 3.0, 0.0);    // Drive Forward 3"
         turnToHeading( TURN_SPEED, -45.0);               // Turn  CW to -45 Degrees
-        holdHeading( TURN_SPEED, -45.0, 0.5);   // Hold -45 Deg heading for a 1/2 second
+        holdHeading( TURN_SPEED, -45.0, 2.0);   // Hold -45 Deg heading for 2 seconds
+
+
 
         driveStraight(DRIVE_SPEED, 17.0, -45.0);  // Drive Forward 17" at -45 degrees (12"x and 12"y)
         turnToHeading( TURN_SPEED,  45.0);               // Turn  CCW  to  45 Degrees
@@ -290,6 +331,7 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
             maxDriveSpeed = Math.abs(maxDriveSpeed);
             moveRobot(maxDriveSpeed, 0);
 
+
             // keep looping while we are still active, and BOTH motors are running.
             while (opModeIsActive() &&
                     (leftBackDrive.isBusy() && rightBackDrive.isBusy()) && leftFrontDrive.isBusy() && rightFrontDrive.isBusy()) {
@@ -316,6 +358,8 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
             rightFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         }
     }
+
+
 
     /**
      *  Method to drive in a straight line straffing, on a fixed compass heading (angle), based on encoder counts.
@@ -582,5 +626,112 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
         // Save a new heading offset equal to the current raw heading.
         headingOffset = getRawHeading();
         robotHeading = 0;
+    }
+
+    /**
+     * Initialize the AprilTag processor.
+     */
+    private void initAprilTag() {
+
+        // Create the AprilTag processor.
+        aprilTag = new AprilTagProcessor.Builder()
+                //.setDrawAxes(false)
+                //.setDrawCubeProjection(false)
+                //.setDrawTagOutline(true)
+                //.setTagFamily(AprilTagProcessor.TagFamily.TAG_36h11)
+                //.setTagLibrary(AprilTagGameDatabase.getCenterStageTagLibrary())
+                //.setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)
+
+                // == CAMERA CALIBRATION ==
+                // If you do not manually specify calibration parameters, the SDK will attempt
+                // to load a predefined calibration for your camera.
+                //.setLensIntrinsics(578.272, 578.272, 402.145, 221.506)
+
+                // ... these parameters are fx, fy, cx, cy.
+
+                .build();
+
+        // Create the vision portal by using a builder.
+        VisionPortal.Builder builder = new VisionPortal.Builder();
+
+        // Set the camera (webcam vs. built-in RC phone camera).
+        if (USE_WEBCAM) {
+            builder.setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"));
+        } else {
+            builder.setCamera(BuiltinCameraDirection.BACK);
+        }
+
+        // Choose a camera resolution. Not all cameras support all resolutions.
+        //builder.setCameraResolution(new Size(640, 480));
+
+        // Enable the RC preview (LiveView).  Set "false" to omit camera monitoring.
+        //builder.enableCameraMonitoring(true);
+
+        // Set the stream format; MJPEG uses less bandwidth than default YUY2.
+        //builder.setStreamFormat(VisionPortal.StreamFormat.YUY2);
+
+        // Choose whether or not LiveView stops if no processors are enabled.
+        // If set "true", monitor shows solid orange screen if no processors enabled.
+        // If set "false", monitor shows camera view without annotations.
+        //builder.setAutoStopLiveView(false);
+
+        // Set and enable the processor.
+        builder.addProcessor(aprilTag);
+
+        // Build the Vision Portal, using the above settings.
+        visionPortal = builder.build();
+
+        // Disable or re-enable the aprilTag processor at any time.
+        //visionPortal.setProcessorEnabled(aprilTag, true);
+
+    }   // end method initAprilTag()
+
+
+
+    /**
+     * Add telemetry about AprilTag detections.
+     */
+    private void telemetryAprilTag() {
+
+        List<AprilTagDetection> currentDetections = aprilTag.getDetections();
+        telemetry.addData("# AprilTags Detected", currentDetections.size());
+
+        // Step through the list of detections and display info for each one.
+        for (AprilTagDetection detection : currentDetections) {
+            if (detection.metadata != null) {
+                telemetry.addLine(String.format("\n==== (ID %d) %s", detection.id, detection.metadata.name));
+                telemetry.addLine(String.format("XYZ %6.1f %6.1f %6.1f  (inch)", detection.ftcPose.x, detection.ftcPose.y, detection.ftcPose.z));
+                telemetry.addLine(String.format("PRY %6.1f %6.1f %6.1f  (deg)", detection.ftcPose.pitch, detection.ftcPose.roll, detection.ftcPose.yaw));
+                telemetry.addLine(String.format("RBE %6.1f %6.1f %6.1f  (inch, deg, deg)", detection.ftcPose.range, detection.ftcPose.bearing, detection.ftcPose.elevation));
+            } else {
+                telemetry.addLine(String.format("\n==== (ID %d) Unknown", detection.id));
+                telemetry.addLine(String.format("Center %6.0f %6.0f   (pixels)", detection.center.x, detection.center.y));
+            }
+        }   // end for() loop
+
+        // Add "key" information to telemetry
+        telemetry.addLine("\nkey:\nXYZ = X (Right), Y (Forward), Z (Up) dist.");
+        telemetry.addLine("PRY = Pitch, Roll & Yaw (XYZ Rotation)");
+        telemetry.addLine("RBE = Range, Bearing & Elevation");
+
+    }   // end method telemetryAprilTag()
+
+    private void    setManualExposure(int exposureMS, int gain) {
+        // Wait for the camera to be open, then use the controls
+
+        if (visionPortal == null) {
+            return;
+        }
+
+        // Make sure camera is streaming before we try to set the exposure controls
+        if (visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING) {
+            telemetry.addData("Camera", "Waiting");
+            telemetry.update();
+            while (!isStopRequested() && (visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING)) {
+                sleep(20);
+            }
+            telemetry.addData("Camera", "Ready");
+            telemetry.update();
+        }
     }
 }
