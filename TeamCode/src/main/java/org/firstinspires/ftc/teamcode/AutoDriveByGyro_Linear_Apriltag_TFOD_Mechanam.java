@@ -29,12 +29,11 @@
 
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.hardware.rev.Rev2mDistanceSensor;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DistanceSensor;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
@@ -43,11 +42,12 @@ import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDir
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.AngularVelocity;
-import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
+import org.firstinspires.ftc.robotcore.external.tfod.Recognition;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+import org.firstinspires.ftc.vision.tfod.TfodProcessor;
 
 import java.util.List;
 
@@ -99,15 +99,22 @@ import java.util.List;
  *  Remove or comment out the @Disabled line to add this OpMode to the Driver Station OpMode list
  */
 
-@Autonomous(name="Robot: Auto April Drive Mech By Gyro", group="Robot")
+@Autonomous(name="Old Auto Right Backstage Drive Mech By Gyro", group="TFOD")
 //@Disabled
-public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
+public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode {
 
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
     /**
      * The variable to store our instance of the AprilTag processor.
      */
     private AprilTagProcessor aprilTag;
+    private TfodProcessor tfod;
+    private static final String TFOD_MODEL_ASSET = "team_element2023.tflite";
+    private static final String[] LABELS = {
+            "blue_te","red_te"
+    };
+
+
 
     /**
      * The variable to store our instance of the vision portal.
@@ -172,8 +179,10 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
 
    // @Override
     public void runOpMode() {
+        initDoubleVision();
+        visionPortal.setProcessorEnabled(tfod, true);
 
-        initAprilTag();
+        //initAprilTag();
 
         // Wait for the DS start button to be touched.
         telemetry.addData("DS preview on/off", "3 dots, Camera Stream");
@@ -250,34 +259,20 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
         //          holdHeading() is used after turns to let the heading stabilize
         //          Add a sleep(2000) after any step to keep the telemetry data visible for review
 
-        telemetryAprilTag(); //First Read April tag
+        //telemetryAprilTag(); //First Read April tag
 
 
 
-
-        driveStraight(DRIVE_SPEED, 3.0, 0.0);    // Drive Forward 3"
-        turnToHeading( TURN_SPEED, -45.0);               // Turn  CW to -45 Degrees
-        holdHeading( TURN_SPEED, -45.0, 2.0);   // Hold -45 Deg heading for 2 seconds
-
-
-
-        driveStraight(DRIVE_SPEED, 17.0, -45.0);  // Drive Forward 17" at -45 degrees (12"x and 12"y)
-        turnToHeading( TURN_SPEED,  45.0);               // Turn  CCW  to  45 Degrees
-        holdHeading( TURN_SPEED,  45.0, 0.5);    // Hold  45 Deg heading for a 1/2 second
-
-        driveStraight(DRIVE_SPEED, 17.0, 45.0);  // Drive Forward 17" at 45 degrees (-12"x and 12"y)
-        turnToHeading( TURN_SPEED,   0.0);               // Turn  CW  to 0 Degrees
-        holdHeading( TURN_SPEED,   0.0, 1.0);    // Hold  0 Deg heading for 1 second
-
-        turnToHeading( TURN_SPEED, -90.0);               // Turn  CW to -90 Degrees
-        holdHeading( TURN_SPEED, -90.0, 0.5);   // Hold -90 Deg heading for a 1/2 second
-        driveStrafe(STRAFE_SPEED,-48, -90);    // Strafe in Reverse 48" (should return to approx. staring position)
+        driveSpeed(STRAFE_SPEED, 48.0, 0.0);
 
         telemetry.addData("Path", "Complete");
         telemetry.update();
 
 
         sleep(1000);  // Pause to display last telemetry message.
+    }
+
+    private void driveSpeed(double strafeSpeed, double v, double v1) {
     }
 
     /*
@@ -628,65 +623,61 @@ public class AutoDriveByGyro_Linear_Apriltag_Mechanam extends LinearOpMode {
         robotHeading = 0;
     }
 
-    /**
-     * Initialize the AprilTag processor.
-     */
-    private void initAprilTag() {
+    private void initDoubleVision() {
+        // -----------------------------------------------------------------------------------------
+        // AprilTag Configuration
+        // -----------------------------------------------------------------------------------------
 
-        // Create the AprilTag processor.
         aprilTag = new AprilTagProcessor.Builder()
-                //.setDrawAxes(false)
-                //.setDrawCubeProjection(false)
-                //.setDrawTagOutline(true)
-                //.setTagFamily(AprilTagProcessor.TagFamily.TAG_36h11)
-                //.setTagLibrary(AprilTagGameDatabase.getCenterStageTagLibrary())
-                //.setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)
-
-                // == CAMERA CALIBRATION ==
-                // If you do not manually specify calibration parameters, the SDK will attempt
-                // to load a predefined calibration for your camera.
-                //.setLensIntrinsics(578.272, 578.272, 402.145, 221.506)
-
-                // ... these parameters are fx, fy, cx, cy.
-
                 .build();
 
-        // Create the vision portal by using a builder.
-        VisionPortal.Builder builder = new VisionPortal.Builder();
+        // -----------------------------------------------------------------------------------------
+        // TFOD Configuration
+        // -----------------------------------------------------------------------------------------
 
-        // Set the camera (webcam vs. built-in RC phone camera).
+        tfod = new TfodProcessor.Builder()
+                .setModelAssetName(TFOD_MODEL_ASSET)
+                .setModelLabels(LABELS)
+                .setIsModelTensorFlow2(true)
+                //.setIsModelQuantized(true)
+                .setModelInputSize(300)
+                .setModelAspectRatio(16.0 / 9.0)
+                .build();
+
+        // -----------------------------------------------------------------------------------------
+        // Camera Configuration
+        // -----------------------------------------------------------------------------------------
+
         if (USE_WEBCAM) {
-            builder.setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"));
+            visionPortal = new VisionPortal.Builder()
+                    .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
+                    .addProcessors(tfod, aprilTag)
+                    .build();
         } else {
-            builder.setCamera(BuiltinCameraDirection.BACK);
+            visionPortal = new VisionPortal.Builder()
+                    .setCamera(BuiltinCameraDirection.BACK)
+                    .addProcessors(tfod, aprilTag)
+                    .build();
         }
+    }   // end initDoubleVision()
 
-        // Choose a camera resolution. Not all cameras support all resolutions.
-        //builder.setCameraResolution(new Size(640, 480));
+    private void telemetryTfod() {
 
-        // Enable the RC preview (LiveView).  Set "false" to omit camera monitoring.
-        //builder.enableCameraMonitoring(true);
+        List<Recognition> currentRecognitions = tfod.getRecognitions();
+        telemetry.addData("# Objects Detected", currentRecognitions.size());
 
-        // Set the stream format; MJPEG uses less bandwidth than default YUY2.
-        //builder.setStreamFormat(VisionPortal.StreamFormat.YUY2);
+        // Step through the list of recognitions and display info for each one.
+        for (Recognition recognition : currentRecognitions) {
+            double x = (recognition.getLeft() + recognition.getRight()) / 2 ;
+            double y = (recognition.getTop()  + recognition.getBottom()) / 2 ;
 
-        // Choose whether or not LiveView stops if no processors are enabled.
-        // If set "true", monitor shows solid orange screen if no processors enabled.
-        // If set "false", monitor shows camera view without annotations.
-        //builder.setAutoStopLiveView(false);
+            telemetry.addData(""," ");
+            telemetry.addData("Image", "%s (%.0f %% Conf.)", recognition.getLabel(), recognition.getConfidence() * 100);
+            telemetry.addData("- Position", "%.0f / %.0f", x, y);
+            telemetry.addData("- Size", "%.0f x %.0f", recognition.getWidth(), recognition.getHeight());
+        }   // end for() loop
 
-        // Set and enable the processor.
-        builder.addProcessor(aprilTag);
-
-        // Build the Vision Portal, using the above settings.
-        visionPortal = builder.build();
-
-        // Disable or re-enable the aprilTag processor at any time.
-        //visionPortal.setProcessorEnabled(aprilTag, true);
-
-    }   // end method initAprilTag()
-
-
+    }
 
     /**
      * Add telemetry about AprilTag detections.
