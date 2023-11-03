@@ -146,8 +146,12 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     private int     rightBackTarget   = 0;
     private int     leftFrontTarget    = 0;
     private int     rightFrontTarget   = 0;
-    private static final int DESIRED_TAG_ID = 7;     // Choose the tag you want to approach or set to -1 for ANY tag.
+    private static final int DESIRED_TAG_ID = -1;     // Choose the tag you want to approach or set to -1 for ANY tag.
     private AprilTagDetection desiredTag = null;     // Used to hold the data for a detected AprilTag
+    // Store Color and Location info
+    private boolean TE_color = false; //Blue = false, Red = true;
+    private int TE_location = 0; //0 = Left, 1= Center, 2= Right;
+    private int TE_confidence = 0; // Default to 0 confidence
 
     // Calculate the COUNTS_PER_INCH for your specific drive train.
     // Go to your motor vendor website to determine your motor's COUNTS_PER_MOTOR_REV
@@ -176,18 +180,14 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     static final double     P_DRIVE_GAIN           = 0.03;     // Larger is more responsive, but also less stable
 
 
-
    // @Override
     public void runOpMode() {
         initDoubleVision();
         visionPortal.setProcessorEnabled(tfod, true);
+        visionPortal.setProcessorEnabled(aprilTag, false);
 
         //initAprilTag();
 
-        // Wait for the DS start button to be touched.
-        telemetry.addData("DS preview on/off", "3 dots, Camera Stream");
-        telemetry.addData(">", "Touch Play to start OpMode");
-        telemetry.update();
         if (USE_WEBCAM)
             setManualExposure(6, 250);  // Use low exposure time to reduce motion blur
 
@@ -234,6 +234,8 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
         // Wait for the game to start (Display Gyro value while waiting)
         while (opModeInInit()) {
+
+            telemetryTfod();
             // Push telemetry to the Driver Station.
             telemetry.update();
             telemetry.addData("Hub orientation", "Logo=%s   USB=%s\n ", logoDirection, usbDirection);
@@ -245,7 +247,10 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             telemetry.addData("Roll (Y)", "%.2f Deg.\n", orientation.getRoll(AngleUnit.DEGREES));
             telemetry.update();
 
+
         }
+
+
 
         // Set the encoders for closed loop speed control, and reset the heading.
         leftBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -253,6 +258,25 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
         rightBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         resetHeading();
+
+        te_detector();
+        te_detector();
+        te_detector();
+        visionPortal.setProcessorEnabled(tfod, false);
+        visionPortal.setProcessorEnabled(aprilTag, true);
+
+        switch (TE_location) {
+            case 0:
+                left_pixel_place();
+                break;
+            case 1:
+                center_pixel_place();
+                break;
+            default:
+                right_pixe_place();
+                break;
+
+        }
 
         // Step through each leg of the path,
         // Notes:   Reverse movement is obtained by setting a negative distance (not speed)
@@ -264,6 +288,8 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
 
         driveSpeed(STRAFE_SPEED, 48.0, 0.0);
+
+
 
         telemetry.addData("Path", "Complete");
         telemetry.update();
@@ -679,6 +705,39 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
     }
 
+    private void te_detector(){
+        double left_third = 100;
+        double right_third = 200;
+        double confidence = 0.8;
+        String te_position = "Left";
+
+        sleep(500);
+        List<Recognition> currentRecognitions = tfod.getRecognitions();
+        telemetry.addData("# Objects Detected", currentRecognitions.size());
+        for (Recognition recognition: currentRecognitions) {
+            if (recognition.getConfidence()*100 > confidence  && TE_confidence > recognition.getConfidence()) {
+                double x = (recognition.getLeft() + recognition.getRight()) / 2 ;
+                TE_color = (recognition.getLabel().equals("red_te"));
+                if (x < left_third) {
+                    TE_location = 0;  //Left
+                    te_position = "Left";
+                } else if (x > right_third) {
+                    TE_location = 2;  //Right
+                    te_position = "Right";
+                } else {
+                    TE_location = 1; //Center
+                    te_position = "Center";
+                }
+            }
+
+        }
+        telemetry.addData(""," ");
+        telemetry.addData("Image", "%s", (TE_color) ? "Red": "Blue");
+        telemetry.addData("- Position", "%s", te_position);
+        telemetry.update();
+
+    }
+
     /**
      * Add telemetry about AprilTag detections.
      */
@@ -725,4 +784,15 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             telemetry.update();
         }
     }
+
+    private void left_pixel_place (){
+        //Place code here
+    }
+    private void  center_pixel_place (){
+        //Place code here
+    }
+    private void right_pixe_place(){
+        //Place code here
+    }
+
 }
