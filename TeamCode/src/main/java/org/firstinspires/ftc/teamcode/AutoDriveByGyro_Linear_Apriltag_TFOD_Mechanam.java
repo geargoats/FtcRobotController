@@ -590,10 +590,10 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             rightFrontSpeed /= max;
         }
 
-        leftBackDrive.setPower(leftBackSpeed);
-        leftFrontDrive.setPower(leftFrontSpeed);
-        rightBackDrive.setPower(rightBackSpeed);
-        rightFrontDrive.setPower(rightFrontSpeed);
+        leftBackDrive.setPower(leftBackSpeed*driveSpeed);
+        leftFrontDrive.setPower(leftFrontSpeed*driveSpeed);
+        rightBackDrive.setPower(rightBackSpeed*driveSpeed);
+        rightFrontDrive.setPower(rightFrontSpeed*driveSpeed);
     }
 
     public void moveRobot_Strafe(double drive, double turn) {
@@ -615,10 +615,10 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             rightFrontSpeed /= max;
         }
 
-        leftBackDrive.setPower(leftBackSpeed);
-        leftFrontDrive.setPower(leftFrontSpeed);
-        rightBackDrive.setPower(rightBackSpeed);
-        rightFrontDrive.setPower(rightFrontSpeed);
+        leftBackDrive.setPower(leftBackSpeed*driveSpeed);
+        leftFrontDrive.setPower(leftFrontSpeed*driveSpeed);
+        rightBackDrive.setPower(rightBackSpeed*driveSpeed);
+        rightFrontDrive.setPower(rightFrontSpeed*driveSpeed);
     }
 
     /**
