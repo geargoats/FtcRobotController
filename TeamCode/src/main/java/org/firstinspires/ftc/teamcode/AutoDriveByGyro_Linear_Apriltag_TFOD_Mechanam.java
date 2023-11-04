@@ -99,10 +99,10 @@ import java.util.List;
  *  Remove or comment out the @Disabled line to add this OpMode to the Driver Station OpMode list
  */
 
-@Autonomous(name="Old Auto Right Backstage Drive Mech By Gyro", group="TFOD")
+@Autonomous(name="Auto Drive", group="TFOD")
 //@Disabled
 public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode {
-
+    private static final boolean DEBUG = true;
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
     /**
      * The variable to store our instance of the AprilTag processor.
@@ -113,7 +113,8 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     private static final String[] LABELS = {
             "blue_te","red_te"
     };
-
+    private final double LEFT_TE_SIDE = 200;  //Where is the boarder for the left team element
+    private final double RIGHT_TE_SIDE = 450; //Where is the boarder for the right team element
 
 
     /**
@@ -151,7 +152,8 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     // Store Color and Location info
     private boolean TE_color = false; //Blue = false, Red = true;
     private int TE_location = 0; //0 = Left, 1= Center, 2= Right;
-    private int TE_confidence = 0; // Default to 0 confidence
+    private String Te_position = "None"; //Temporary TE String
+    private float TE_confidence = 0; // Default to 0 confidence
 
     // Calculate the COUNTS_PER_INCH for your specific drive train.
     // Go to your motor vendor website to determine your motor's COUNTS_PER_MOTOR_REV
@@ -237,7 +239,6 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
             telemetryTfod();
             // Push telemetry to the Driver Station.
-            telemetry.update();
             telemetry.addData("Hub orientation", "Logo=%s   USB=%s\n ", logoDirection, usbDirection);
             telemetry.addData(">", "Robot Heading = %4.0f", getRawHeading());
             YawPitchRollAngles orientation = imu.getRobotYawPitchRollAngles();
@@ -259,25 +260,41 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
         rightFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         resetHeading();
 
-        te_detector();
-        te_detector();
-        te_detector();
+        for (int i = 0; i<10; i++) {
+            te_detector();
+            sleep(20);
+        }
         visionPortal.setProcessorEnabled(tfod, false);
         visionPortal.setProcessorEnabled(aprilTag, true);
 
         switch (TE_location) {
             case 0:
+                telemetry.addLine("Starting Left TE Location");
                 left_pixel_place();
                 break;
             case 1:
+                telemetry.addLine("Starting Center TE Location");
                 center_pixel_place();
                 break;
             default:
+                telemetry.addLine("Starting Right TE Location");
                 right_pixe_place();
                 break;
 
         }
 
+        if (DEBUG) {
+            ElapsedTime holdTimer = new ElapsedTime();
+            holdTimer.reset();
+            double holdTime = 20;
+
+            // keep looping while we have time remaining.
+            while (opModeIsActive() && (holdTimer.time() < holdTime)) {
+
+                telemetryAprilTag();
+                telemetry.update();
+            }
+        }
         // Step through each leg of the path,
         // Notes:   Reverse movement is obtained by setting a negative distance (not speed)
         //          holdHeading() is used after turns to let the heading stabilize
@@ -706,34 +723,37 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     }
 
     private void te_detector(){
-        double left_third = 100;
-        double right_third = 200;
-        double confidence = 0.8;
-        String te_position = "Left";
+        float confidence = 80;
+        String red_label = "red_te";
+        String temp_label = "";
 
-        sleep(500);
+//        sleep(500);
         List<Recognition> currentRecognitions = tfod.getRecognitions();
         telemetry.addData("# Objects Detected", currentRecognitions.size());
-        for (Recognition recognition: currentRecognitions) {
-            if (recognition.getConfidence()*100 > confidence  && TE_confidence > recognition.getConfidence()) {
+        for (Recognition recognition : currentRecognitions) {
+            telemetry.addData("Confidence", "%.0f %% gt %.0f %%", recognition.getConfidence()*100,TE_confidence);
+            if (recognition.getConfidence()*100 > confidence  && TE_confidence < recognition.getConfidence()) {
+                TE_confidence = recognition.getConfidence();
                 double x = (recognition.getLeft() + recognition.getRight()) / 2 ;
-                TE_color = (recognition.getLabel().equals("red_te"));
-                if (x < left_third) {
+                temp_label = recognition.getLabel();
+                telemetry.addData("Test:", "%s", temp_label);
+                TE_color = (temp_label.equals(red_label));
+                if (x < LEFT_TE_SIDE) {
                     TE_location = 0;  //Left
-                    te_position = "Left";
-                } else if (x > right_third) {
+                    Te_position = "Left";
+                } else if (x > RIGHT_TE_SIDE) {
                     TE_location = 2;  //Right
-                    te_position = "Right";
+                    Te_position = "Right";
                 } else {
                     TE_location = 1; //Center
-                    te_position = "Center";
+                    Te_position = "Center";
                 }
             }
 
         }
         telemetry.addData(""," ");
         telemetry.addData("Image", "%s", (TE_color) ? "Red": "Blue");
-        telemetry.addData("- Position", "%s", te_position);
+        telemetry.addData("Position", "%s", Te_position);
         telemetry.update();
 
     }
