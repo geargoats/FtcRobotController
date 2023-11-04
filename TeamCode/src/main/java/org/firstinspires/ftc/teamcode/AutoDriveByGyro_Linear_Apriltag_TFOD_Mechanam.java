@@ -278,7 +278,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
                 break;
             default:
                 telemetry.addLine("Starting Right TE Location");
-                right_pixe_place();
+                right_pixel_place();
                 break;
 
         }
@@ -807,12 +807,15 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
     private void left_pixel_place (){
         //Place code here
+        driveStrafe(DRIVE_SPEED,-21.6,33);
     }
     private void  center_pixel_place (){
         //Place code here
+        driveStraight(DRIVE_SPEED,29,0);
     }
-    private void right_pixe_place(){
+    private void right_pixel_place(){
         //Place code here
+        driveStraight(DRIVE_SPEED,25,-45);
     }
 
 }
