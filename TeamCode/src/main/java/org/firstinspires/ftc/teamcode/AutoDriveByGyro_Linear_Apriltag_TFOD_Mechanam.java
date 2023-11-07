@@ -33,6 +33,7 @@ import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -128,6 +129,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     private DcMotor         leftFrontDrive   = null;
     private DcMotor         rightFrontDrive  = null;
     private IMU             imu         = null;      // Control/Expansion Hub IMU
+    private CRServo pixel_servo;
 
     private double          robotHeading  = 0;
     private double          headingOffset = 0;
@@ -166,24 +168,27 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     static final double     WHEEL_DIAMETER_INCHES   = 3.77953 ;     // For figuring circumference
     static final double     COUNTS_PER_INCH         = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) /
                                                       (WHEEL_DIAMETER_INCHES * 3.1415);
+    static final double     ROBOT_WIDTH_INCH        =  12.5; //From Center of wheels to Center of Wheels
 
     // These constants define the desired driving/control characteristics
     // They can/should be tweaked to suit the specific robot drive train.
     static final double     DRIVE_SPEED             = 0.4;     // Max driving speed for better distance accuracy.
     static final double     TURN_SPEED              = 0.2;     // Max Turn speed to limit turn rate
-    static final double     STRAFE_SPEED            = 0.2;     // Max Turn speed to limit turn rate
+    static final double     STRAFE_SPEED            = 0.5;     // Max Turn speed to limit turn rate
     static final double     HEADING_THRESHOLD       = 1.0 ;    // How close must the heading get to the target before moving to next step.
                                                                // Requiring more accuracy (a smaller number) will often make the turn take longer to get into the final position.
     // Define the Proportional control coefficient (or GAIN) for "heading control".
     // We define one value when Turning (larger errors), and the other is used when Driving straight (smaller errors).
     // Increase these numbers if the heading does not corrects strongly enough (eg: a heavy robot or using tracks)
     // Decrease these numbers if the heading does not settle on the correct value (eg: very agile robot with omni wheels)
-    static final double     P_TURN_GAIN            = 0.02;     // Larger is more responsive, but also less stable
+    static final double     P_TURN_GAIN            = 0.03;     // Larger is more responsive, but also less stable
     static final double     P_DRIVE_GAIN           = 0.03;     // Larger is more responsive, but also less stable
 
 
    // @Override
     public void runOpMode() {
+        pixel_servo = hardwareMap.get(CRServo.class, "pixel_holder");
+
         initDoubleVision();
         visionPortal.setProcessorEnabled(tfod, true);
         visionPortal.setProcessorEnabled(aprilTag, false);
@@ -236,7 +241,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
         // Wait for the game to start (Display Gyro value while waiting)
         while (opModeInInit()) {
-
+            pixel_servo.setPower(-1);
             telemetryTfod();
             // Push telemetry to the Driver Station.
             telemetry.addData("Hub orientation", "Logo=%s   USB=%s\n ", logoDirection, usbDirection);
@@ -251,6 +256,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
         }
 
+        pixel_servo.setPower(1);
 
 
         // Set the encoders for closed loop speed control, and reset the heading.
@@ -327,6 +333,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
     // **********  HIGH Level driving functions.  ********************
 
+
     /**
     *  Method to drive in a straight line, on a fixed compass heading (angle), based on encoder counts.
     *  Move will stop if either of these conditions occur:
@@ -367,7 +374,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             // Set the required driving speed  (must be positive for RUN_TO_POSITION)
             // Start driving straight, and then enter the control loop
             maxDriveSpeed = Math.abs(maxDriveSpeed);
-            moveRobot(maxDriveSpeed, 0);
+            moveRobot(maxDriveSpeed, maxDriveSpeed, 0);
 
 
             // keep looping while we are still active, and BOTH motors are running.
@@ -382,14 +389,14 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
                     turnSpeed *= -1.0;
 
                 // Apply the turning correction to the current driving speed.
-                moveRobot(driveSpeed, turnSpeed);
+                moveRobot(maxDriveSpeed,maxDriveSpeed, turnSpeed);
 
                 // Display drive status for the driver.
                 sendTelemetry(true);
             }
 
             // Stop all motion & Turn off RUN_TO_POSITION
-            moveRobot(0, 0);
+            moveRobot(maxDriveSpeed,0, 0);
             leftBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             leftFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             rightBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -460,7 +467,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             }
 
             // Stop all motion & Turn off RUN_TO_POSITION
-            moveRobot(0, 0);
+            moveRobot(maxDriveSpeed,0, 0);
             leftBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             leftFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             rightBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -494,14 +501,14 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             turnSpeed = Range.clip(turnSpeed, -maxTurnSpeed, maxTurnSpeed);
 
             // Pivot in place by applying the turning correction
-            moveRobot(0, turnSpeed);
+            moveRobot(maxTurnSpeed,0, turnSpeed);
 
             // Display drive status for the driver.
             sendTelemetry(false);
         }
 
         // Stop all motion;
-        moveRobot(0, 0);
+        moveRobot(maxTurnSpeed,0, 0);
     }
 
     /**
@@ -529,14 +536,14 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             turnSpeed = Range.clip(turnSpeed, -maxTurnSpeed, maxTurnSpeed);
 
             // Pivot in place by applying the turning correction
-            moveRobot(0, turnSpeed);
+            moveRobot(maxTurnSpeed,0, turnSpeed);
 
             // Display drive status for the driver.
             sendTelemetry(false);
         }
 
         // Stop all motion;
-        moveRobot(0, 0);
+        moveRobot(maxTurnSpeed,0, 0);
     }
 
     // **********  LOW Level driving functions.  ********************
@@ -571,7 +578,8 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
      * @param drive forward motor speed
      * @param turn  clockwise turning motor speed.
      */
-    public void moveRobot(double drive, double turn) {
+    public void moveRobot(double max_speed, double drive, double turn) {
+        max_speed =  (max_speed>1.0) ? 1.0 : max_speed; // if max speed is greater than 1.0 return 1.0
         driveSpeed = drive;     // save this value as a class member so it can be used by telemetry.
         turnSpeed  = turn;      // save this value as a class member so it can be used by telemetry.
 
@@ -582,7 +590,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
         // Scale speeds down if either one exceeds +/- 1.0;
         double max = Math.max(Math.max(Math.abs(leftBackSpeed), Math.abs(rightBackSpeed)),Math.max( Math.abs(leftFrontSpeed), Math.abs(rightFrontSpeed)));
-        if (max > 1.0)
+        if (max > max_speed)
         {
             leftBackSpeed /= max;
             leftFrontSpeed /= max;
@@ -590,10 +598,10 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             rightFrontSpeed /= max;
         }
 
-        leftBackDrive.setPower(leftBackSpeed*driveSpeed);
-        leftFrontDrive.setPower(leftFrontSpeed*driveSpeed);
-        rightBackDrive.setPower(rightBackSpeed*driveSpeed);
-        rightFrontDrive.setPower(rightFrontSpeed*driveSpeed);
+        leftBackDrive.setPower(leftBackSpeed*max_speed);
+        leftFrontDrive.setPower(leftFrontSpeed*max_speed);
+        rightBackDrive.setPower(rightBackSpeed*max_speed);
+        rightFrontDrive.setPower(rightFrontSpeed*max_speed);
     }
 
     public void moveRobot_Strafe(double drive, double turn) {
@@ -615,10 +623,10 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             rightFrontSpeed /= max;
         }
 
-        leftBackDrive.setPower(leftBackSpeed*driveSpeed);
-        leftFrontDrive.setPower(leftFrontSpeed*driveSpeed);
-        rightBackDrive.setPower(rightBackSpeed*driveSpeed);
-        rightFrontDrive.setPower(rightFrontSpeed*driveSpeed);
+        leftBackDrive.setPower(leftBackSpeed);
+        leftFrontDrive.setPower(leftFrontSpeed);
+        rightBackDrive.setPower(rightBackSpeed);
+        rightFrontDrive.setPower(rightFrontSpeed);
     }
 
     /**
@@ -807,7 +815,17 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
     private void left_pixel_place (){
         //Place code here
-        driveStrafe(DRIVE_SPEED,-21.6,33);
+        driveStraight(0.2,4,0);
+        driveStraight(0.5,20,90);
+//        turnToHeading(TURN_SPEED,45);
+//        driveStraight(DRIVE_SPEED,7,45);
+        pixel_servo.setPower(0);
+        holdHeading(TURN_SPEED,60,0.2);
+//        driveStraight(DRIVE_SPEED,-18,60);
+//        holdHeading(DRIVE_SPEED,90,0.2);
+//        turnToHeading(TURN_SPEED,90);
+//        holdHeading(DRIVE_SPEED,90,0.2);
+//        driveStrafe(STRAFE_SPEED,48,90);
     }
     private void  center_pixel_place (){
         //Place code here
@@ -815,7 +833,17 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     }
     private void right_pixel_place(){
         //Place code here
-        driveStraight(DRIVE_SPEED,25,-45);
+        driveStraight(DRIVE_SPEED,18,0);
+        turnToHeading(TURN_SPEED,-45);
+        driveStraight(DRIVE_SPEED,8,-45);
+        pixel_servo.setPower(0);
+        holdHeading(DRIVE_SPEED,-45,0.2);
+//        driveStraight(DRIVE_SPEED,-18,0);
+//        holdHeading(DRIVE_SPEED,60,0.2);
+//        turnToHeading(TURN_SPEED,90);
+//        holdHeading(DRIVE_SPEED,90,0.2);
+//        driveStrafe(STRAFE_SPEED,48,90);
+
     }
 
 }
