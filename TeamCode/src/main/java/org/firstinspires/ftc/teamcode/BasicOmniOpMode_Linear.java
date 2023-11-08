@@ -1,10 +1,18 @@
 package org.firstinspires.ftc.teamcode;
 
+
+
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.robotcore.hardware.CRServo;
+import com.qualcomm.robotcore.hardware.TouchSensor;
+
+
+import java.time.Clock;
 
 /**
  * This file contains an example of a Linear "OpMode".
@@ -35,7 +43,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  */
 
 @TeleOp(name="Basic: Omni Linear OpMode", group="Linear Opmode")
-@Disabled
+//@Disabled
 public class BasicOmniOpMode_Linear extends LinearOpMode {
 
     // Declare OpMode members for each of the 4 motors.
@@ -44,6 +52,26 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
     private DcMotor leftBackDrive = null;
     private DcMotor rightFrontDrive = null;
     private DcMotor rightBackDrive = null;
+    private CRServo drone_servo;
+    private CRServo pixel_servo;
+    private CRServo pixel_servo_2;
+    private DcMotor linear_motor;
+    private DcMotor angleMotor;
+    private TouchSensor linear_stop_btm;
+    private TouchSensor linear_slide_back;
+    private TouchSensor linear_slide_front;
+    private final double     LIFT_SPEED             = 1;
+    float Speed_multiplier;
+    float min_speed = (float)0.3;
+    float robot_speed;
+    boolean drone_delay = false;
+    double delay_mili=getRuntime();
+    boolean pixel_toggle = true;
+    boolean changed = false; //Outside of loop()
+    boolean changed2 = false; //Outside of loop()
+
+
+
 
     @Override
     public void runOpMode() {
@@ -54,7 +82,14 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         leftBackDrive  = hardwareMap.get(DcMotor.class, "left_back_drive");
         rightFrontDrive = hardwareMap.get(DcMotor.class, "right_front_drive");
         rightBackDrive = hardwareMap.get(DcMotor.class, "right_back_drive");
-
+        drone_servo = hardwareMap.get(CRServo.class,"drone_servo");
+        pixel_servo = hardwareMap.get(CRServo.class, "pixel_holder");
+        pixel_servo_2 = hardwareMap.get(CRServo.class, "pixel_holder_2");
+        linear_motor = hardwareMap.get(DcMotor.class,"linear_motor");
+        angleMotor = hardwareMap.get(DcMotor.class,"lift_Motor");
+        //linear_stop_btm = hardwareMap.get(TouchSensor.class, "linear_stop");
+        linear_slide_back = hardwareMap.get(TouchSensor.class, "linear_stop_back"); //Tells you when you hit the back angle
+        linear_slide_front = hardwareMap.get(TouchSensor.class, "linear_stop_front");//Tells you when you hit the front angle
         // ########################################################################################
         // !!!            IMPORTANT Drive Information. Test your motor directions.            !!!!!
         // ########################################################################################
@@ -69,10 +104,18 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         leftBackDrive.setDirection(DcMotor.Direction.REVERSE);
         rightFrontDrive.setDirection(DcMotor.Direction.FORWARD);
         rightBackDrive.setDirection(DcMotor.Direction.FORWARD);
+        linear_motor.setDirection(DcMotorSimple.Direction.FORWARD);
+        linear_motor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        angleMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        linear_motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        angleMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        double linear_speed_stick;
 
         // Wait for the game to start (driver presses PLAY)
         telemetry.addData("Status", "Initialized");
         telemetry.update();
+        pixel_servo.setPower(-1);
+        linear_motor.setPower(0);
 
         waitForStart();
         runtime.reset();
@@ -85,6 +128,10 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
             double axial   = -gamepad1.left_stick_y;  // Note: pushing stick forward gives negative value
             double lateral =  gamepad1.left_stick_x;
             double yaw     =  gamepad1.right_stick_x;
+            //Increase Speed based on trigger;
+            Speed_multiplier = gamepad1.right_trigger;
+
+            linear_motor.setPower(0);
 
             // Combine the joystick requests for each axis-motion to determine each wheel's power.
             // Set up a variable for each drive wheel to save the power level for telemetry.
@@ -105,6 +152,7 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
                 leftBackPower   /= max;
                 rightBackPower  /= max;
             }
+            robot_speed = min_speed + ((1-min_speed) * Speed_multiplier);
 
             // This is test code:
             //
@@ -124,6 +172,10 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
             */
 
             // Send calculated power to wheels
+            leftFrontPower *=robot_speed;
+            rightBackPower *=robot_speed;
+            leftBackPower  *= robot_speed;
+            rightFrontPower *= robot_speed;
             leftFrontDrive.setPower(leftFrontPower);
             rightFrontDrive.setPower(rightFrontPower);
             leftBackDrive.setPower(leftBackPower);
@@ -133,6 +185,60 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
             telemetry.addData("Status", "Run Time: " + runtime.toString());
             telemetry.addData("Front left/Right", "%4.2f, %4.2f", leftFrontPower, rightFrontPower);
             telemetry.addData("Back  left/Right", "%4.2f, %4.2f", leftBackPower, rightBackPower);
+            telemetry.addData("Angle Encoder Value", "%d",angleMotor.getCurrentPosition());
             telemetry.update();
+            if(gamepad1.y && !changed) {
+                if(pixel_servo.getPower() == -1) pixel_servo.setPower(1);
+                else pixel_servo.setPower(-1);
+                changed = true;
+            } else if(!gamepad1.y) changed = false;
+            if(gamepad1.x && !changed2) {
+                if(pixel_servo_2.getPower() == -1) pixel_servo_2.setPower(1);
+                else pixel_servo_2.setPower(-1);
+                changed2 = true;
+            } else if(!gamepad1.x) changed2 = false;
+            if (gamepad1.a) {
+                if (delay_mili+1 < getRuntime()){
+                    drone_servo.setPower(-1);
+                    sleep(500);
+                } else {
+                    drone_servo.setPower(1);
+                }
+            } else {
+                drone_servo.setPower(1);
+                delay_mili = getRuntime();
+            }
+            linear_motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            if (gamepad1.dpad_up) {
+                linear_motor.setPower(-1);
+            } else if(gamepad1.dpad_down) {
+                linear_motor.setPower(1);
+            } else {
+                linear_motor.setPower(0);
+            }
+            angleMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            if (!linear_slide_back.isPressed() && gamepad1.left_bumper){
+                    angleMotor.setPower(0.2);
+            } else if(gamepad1.right_bumper){
+                angleMotor.setPower(-0.2);
+            } else {
+                angleMotor.setPower(0);
+            }
+            /*if ((gamepad1.dpad_down || gamepad1.dpad_up )) {
+                double speed_dpad = 0.1;
+                double dpad_up = (gamepad1.dpad_up) ? speed_dpad : 0.0;
+                double dpad_down = (gamepad1.dpad_down) ? speed_dpad*-1.0 : 0.0;
+                linear_speed_stick = (gamepad1.dpad_down) ? dpad_down : dpad_up;
+                if (linear_stop_btm.isPressed()) {
+                    linear_motor.setPower(0);
+                } else {
+                    linear_motor.setPower(linear_speed_stick);
+                }
+            } else {
+                //linear_motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+                telemetry.update();
+
+            }*/
         }
-    }}
+    }
+}

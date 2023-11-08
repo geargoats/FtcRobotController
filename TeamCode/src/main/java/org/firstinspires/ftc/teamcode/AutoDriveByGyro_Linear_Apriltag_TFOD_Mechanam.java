@@ -35,7 +35,10 @@ import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.DistanceSensor;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.TouchSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
@@ -43,6 +46,7 @@ import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDir
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.AngularVelocity;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 import org.firstinspires.ftc.robotcore.external.tfod.Recognition;
 import org.firstinspires.ftc.vision.VisionPortal;
@@ -116,6 +120,8 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     };
     private final double LEFT_TE_SIDE = 200;  //Where is the boarder for the left team element
     private final double RIGHT_TE_SIDE = 450; //Where is the boarder for the right team element
+    private final int LEVEL_ARM = 2500;
+    private final double DIST_MAX = 20; //if the Distance is greater than 20" then you are not left of a post
 
 
     /**
@@ -124,12 +130,16 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     private VisionPortal visionPortal;
 
     /* Declare OpMode members. */
+    private DistanceSensor sensorDistance;
     private DcMotor         leftBackDrive   = null;
     private DcMotor         rightBackDrive  = null;
     private DcMotor         leftFrontDrive   = null;
     private DcMotor         rightFrontDrive  = null;
+    private DcMotor         angleMotor = null;
     private IMU             imu         = null;      // Control/Expansion Hub IMU
     private CRServo pixel_servo;
+    private CRServo pixel_servo_2;
+    private TouchSensor linear_slide_back;
 
     private double          robotHeading  = 0;
     private double          headingOffset = 0;
@@ -149,6 +159,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     private int     rightBackTarget   = 0;
     private int     leftFrontTarget    = 0;
     private int     rightFrontTarget   = 0;
+    private int     angleTarget = 0;
     private static final int DESIRED_TAG_ID = -1;     // Choose the tag you want to approach or set to -1 for ANY tag.
     private AprilTagDetection desiredTag = null;     // Used to hold the data for a detected AprilTag
     // Store Color and Location info
@@ -156,6 +167,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     private int TE_location = 0; //0 = Left, 1= Center, 2= Right;
     private String Te_position = "None"; //Temporary TE String
     private float TE_confidence = 0; // Default to 0 confidence
+    private boolean pole_left;// If there is a pole left, and Red detected you are in backfield if there is a poll left and blue then you are in the frontfield.
 
     // Calculate the COUNTS_PER_INCH for your specific drive train.
     // Go to your motor vendor website to determine your motor's COUNTS_PER_MOTOR_REV
@@ -173,7 +185,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     // These constants define the desired driving/control characteristics
     // They can/should be tweaked to suit the specific robot drive train.
     static final double     DRIVE_SPEED             = 0.4;     // Max driving speed for better distance accuracy.
-    static final double     TURN_SPEED              = 0.2;     // Max Turn speed to limit turn rate
+    static final double     TURN_SPEED              = 0.4;     // Max Turn speed to limit turn rate
     static final double     STRAFE_SPEED            = 0.5;     // Max Turn speed to limit turn rate
     static final double     HEADING_THRESHOLD       = 1.0 ;    // How close must the heading get to the target before moving to next step.
                                                                // Requiring more accuracy (a smaller number) will often make the turn take longer to get into the final position.
@@ -188,6 +200,9 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
    // @Override
     public void runOpMode() {
         pixel_servo = hardwareMap.get(CRServo.class, "pixel_holder");
+        pixel_servo_2 = hardwareMap.get(CRServo.class, "pixel_holder_2");
+        sensorDistance = hardwareMap.get(DistanceSensor.class, "range");
+
 
         initDoubleVision();
         visionPortal.setProcessorEnabled(tfod, true);
@@ -208,6 +223,9 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
         leftFrontDrive = hardwareMap.get(DcMotor.class, "left_front_drive");
         rightBackDrive = hardwareMap.get(DcMotor.class, "right_front_drive");
         rightFrontDrive = hardwareMap.get(DcMotor.class, "right_back_drive");
+        angleMotor = hardwareMap.get(DcMotor.class,"lift_Motor");
+        linear_slide_back = hardwareMap.get(TouchSensor.class, "linear_stop_back");
+
 
         // To drive forward, most robots need the motor on one side to be reversed, because the axles point in opposite directions.
         // When run, this OpMode should start both motors driving forward. So adjust these two lines based on your first test drive.
@@ -216,6 +234,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
         leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
         rightBackDrive.setDirection(DcMotor.Direction.FORWARD);
         rightFrontDrive.setDirection(DcMotor.Direction.FORWARD);
+        angleMotor.setDirection(DcMotorSimple.Direction.FORWARD);//Moves Claw up
 
         // define initialization values for IMU, and then initialize it.
         imu = hardwareMap.get(IMU.class, "imu");
@@ -234,14 +253,15 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
         leftFrontDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         rightBackDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         rightFrontDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        angleMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         leftBackDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         leftFrontDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         rightBackDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         rightFrontDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        angleMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         // Wait for the game to start (Display Gyro value while waiting)
         while (opModeInInit()) {
-            pixel_servo.setPower(-1);
             telemetryTfod();
             // Push telemetry to the Driver Station.
             telemetry.addData("Hub orientation", "Logo=%s   USB=%s\n ", logoDirection, usbDirection);
@@ -251,12 +271,18 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             telemetry.addData("Yaw (Z)", "%.2f Deg. (Heading)", orientation.getYaw(AngleUnit.DEGREES));
             telemetry.addData("Pitch (X)", "%.2f Deg.", orientation.getPitch(AngleUnit.DEGREES));
             telemetry.addData("Roll (Y)", "%.2f Deg.\n", orientation.getRoll(AngleUnit.DEGREES));
+            telemetry.addData("Left Distance", String.format("%.01f in", sensorDistance.getDistance(DistanceUnit.INCH)));
+            pole_left = sensorDistance.getDistance(DistanceUnit.INCH)<DIST_MAX; //True Poll to left
+            telemetry.addData("Pole Detected:"," %s", (pole_left)?"True":"False");
             telemetry.update();
 
-
         }
-
-        pixel_servo.setPower(1);
+        pixel_servo.setPower(-1);
+        pixel_servo_2.setPower(-1);
+        sleep(300);
+        pixel_servo.setPower(1); //Hold Pixel Right Front
+        pixel_servo_2.setPower(1);// Hold Pixel Left Front
+        angleMotor.setPower(0);
 
 
         // Set the encoders for closed loop speed control, and reset the heading.
@@ -264,12 +290,14 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
         leftFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        angleMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         resetHeading();
 
         for (int i = 0; i<10; i++) {
             te_detector();
             sleep(20);
         }
+        pixel_servo_2.setPower(-1);
         visionPortal.setProcessorEnabled(tfod, false);
         visionPortal.setProcessorEnabled(aprilTag, true);
 
@@ -307,10 +335,6 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
         //          Add a sleep(2000) after any step to keep the telemetry data visible for review
 
         //telemetryAprilTag(); //First Read April tag
-
-
-
-        driveSpeed(STRAFE_SPEED, 48.0, 0.0);
 
 
 
@@ -713,20 +737,44 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     }   // end initDoubleVision()
 
     private void telemetryTfod() {
+        float confidence = 80;
+        String temp_label = "";
+        String red_label = "red_te";
+
+
 
         List<Recognition> currentRecognitions = tfod.getRecognitions();
         telemetry.addData("# Objects Detected", currentRecognitions.size());
 
         // Step through the list of recognitions and display info for each one.
         for (Recognition recognition : currentRecognitions) {
-            double x = (recognition.getLeft() + recognition.getRight()) / 2 ;
-            double y = (recognition.getTop()  + recognition.getBottom()) / 2 ;
+            if (recognition.getConfidence()*100 > confidence  ) {
+                double x = (recognition.getLeft() + recognition.getRight()) / 2 ;
+                double y = (recognition.getTop()  + recognition.getBottom()) / 2 ;
 
-            telemetry.addData(""," ");
-            telemetry.addData("Image", "%s (%.0f %% Conf.)", recognition.getLabel(), recognition.getConfidence() * 100);
-            telemetry.addData("- Position", "%.0f / %.0f", x, y);
-            telemetry.addData("- Size", "%.0f x %.0f", recognition.getWidth(), recognition.getHeight());
-        }   // end for() loop
+                telemetry.addData(""," ");
+                telemetry.addData("Image", "%s (%.0f %% Conf.)", recognition.getLabel(), recognition.getConfidence() * 100);
+                telemetry.addData("- Position", "%.0f / %.0f", x, y);
+                telemetry.addData("- Size", "%.0f x %.0f", recognition.getWidth(), recognition.getHeight());
+                temp_label = recognition.getLabel();
+                telemetry.addData("Test:", "%s", temp_label);
+                TE_color = (temp_label.equals(red_label));
+                if (x < LEFT_TE_SIDE) {
+                    TE_location = 0;  //Left
+                    Te_position = "Left";
+                } else if (x > RIGHT_TE_SIDE) {
+                    TE_location = 2;  //Right
+                    Te_position = "Right";
+                } else {
+                    TE_location = 1; //Center
+                    Te_position = "Center";
+                }
+            }
+
+        }
+        telemetry.addData(""," ");
+        telemetry.addData("Image", "%s", (TE_color) ? "Red": "Blue");
+        telemetry.addData("Position", "%s", Te_position);
 
     }
 
@@ -815,34 +863,59 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
     private void left_pixel_place (){
         //Place code here
-        driveStraight(0.2,4,0);
-        driveStraight(0.5,20,90);
-//        turnToHeading(TURN_SPEED,45);
-//        driveStraight(DRIVE_SPEED,7,45);
-        pixel_servo.setPower(0);
-        holdHeading(TURN_SPEED,60,0.2);
-//        driveStraight(DRIVE_SPEED,-18,60);
+        pixel_servo_2.setPower(1);
+        driveStraight(0.4,12,0);
+//        driveStraight(0.5,24,90);
+        turnToHeading(TURN_SPEED,30);
+        pixel_servo_2.setPower(-1);
+        driveStraight(DRIVE_SPEED,12,30);
+        holdHeading(TURN_SPEED,30,0.4);
+        driveStraight(DRIVE_SPEED,-14,30);
 //        holdHeading(DRIVE_SPEED,90,0.2);
-//        turnToHeading(TURN_SPEED,90);
-//        holdHeading(DRIVE_SPEED,90,0.2);
-//        driveStrafe(STRAFE_SPEED,48,90);
+        turnToHeading(TURN_SPEED,-90);
+        holdHeading(DRIVE_SPEED,-90,0.2);
+        driveStrafe(STRAFE_SPEED,-48,-90);
     }
     private void  center_pixel_place (){
         //Place code here
-        driveStraight(DRIVE_SPEED,29,0);
+        pixel_servo_2.setPower(1);
+        driveStraight(0.4,14,0);
+        if (pole_left){
+            turnToHeading(TURN_SPEED,45);
+            driveStrafe(STRAFE_SPEED,22,45);
+            turnToHeading(TURN_SPEED,90);
+            driveStrafe(0.4,16,90);
+            pixel_servo_2.setPower(-1);
+            driveStraight(DRIVE_SPEED,-4,90);
+            driveStrafe(STRAFE_SPEED,16,90);
+        } else {
+            turnToHeading(TURN_SPEED,-45);
+            driveStrafe(STRAFE_SPEED,-22,-45);
+            turnToHeading(TURN_SPEED,-90);
+            driveStrafe(0.4,-16,-90);
+            pixel_servo_2.setPower(-1);
+            driveStraight(DRIVE_SPEED,-4,-90);
+            driveStrafe(STRAFE_SPEED,-16,-90);
+
+        }
+
+//        driveStraight(DRIVE_SPEED,29,0);
     }
     private void right_pixel_place(){
         //Place code here
-        driveStraight(DRIVE_SPEED,18,0);
-        turnToHeading(TURN_SPEED,-45);
-        driveStraight(DRIVE_SPEED,8,-45);
-        pixel_servo.setPower(0);
-        holdHeading(DRIVE_SPEED,-45,0.2);
-//        driveStraight(DRIVE_SPEED,-18,0);
-//        holdHeading(DRIVE_SPEED,60,0.2);
-//        turnToHeading(TURN_SPEED,90);
+        pixel_servo_2.setPower(1);
+        driveStraight(0.4,14,0);
+//        driveStraight(0.5,24,90);
+        turnToHeading(TURN_SPEED,-40);
+        driveStrafe(STRAFE_SPEED,-1,-40);
+        pixel_servo_2.setPower(-1);
+        driveStraight(DRIVE_SPEED,12,-40);
+        holdHeading(TURN_SPEED,-40,0.4);
+        driveStraight(DRIVE_SPEED,-12,-40);
 //        holdHeading(DRIVE_SPEED,90,0.2);
-//        driveStrafe(STRAFE_SPEED,48,90);
+        turnToHeading(TURN_SPEED,-90);
+        holdHeading(DRIVE_SPEED,-90,0.2);
+        driveStrafe(STRAFE_SPEED,-48,-90);
 
     }
 

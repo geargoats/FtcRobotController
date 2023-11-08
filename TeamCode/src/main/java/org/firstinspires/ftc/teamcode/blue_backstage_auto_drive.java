@@ -18,7 +18,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 
 @Autonomous(name="Robot: blue_backstage_auto_drive", group="blue")
-//@Disabled
+@Disabled
 public class blue_backstage_auto_drive extends LinearOpMode {
 
     /* Declare OpMode members. */

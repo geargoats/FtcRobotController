@@ -27,7 +27,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.firstinspires.ftc.robotcontroller.external.samples;
+package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
@@ -68,6 +68,8 @@ public class RobotAutoDriveByEncoder_Linear extends LinearOpMode {
     /* Declare OpMode members. */
     private DcMotor         leftDrive   = null;
     private DcMotor         rightDrive  = null;
+    private DcMotor         frontrightdrive = null;
+    private DcMotor         frontleftdrive = null;
 
     private ElapsedTime     runtime = new ElapsedTime();
 
@@ -89,8 +91,10 @@ public class RobotAutoDriveByEncoder_Linear extends LinearOpMode {
     public void runOpMode() {
 
         // Initialize the drive system variables.
-        leftDrive  = hardwareMap.get(DcMotor.class, "left_drive");
-        rightDrive = hardwareMap.get(DcMotor.class, "right_drive");
+        leftDrive  = hardwareMap.get(DcMotor.class, "left_back_drive");
+        rightDrive = hardwareMap.get(DcMotor.class, "right_back_drive");
+        frontrightdrive = hardwareMap.get(DcMotor.class,"right_front_drive");
+        frontleftdrive = hardwareMap.get(DcMotor.class,"left_front_drive");
 
         // To drive forward, most robots need the motor on one side to be reversed, because the axles point in opposite directions.
         // When run, this OpMode should start both motors driving forward. So adjust these two lines based on your first test drive.
@@ -166,8 +170,8 @@ public class RobotAutoDriveByEncoder_Linear extends LinearOpMode {
 
                 // Display it for the driver.
                 telemetry.addData("Running to",  " %7d :%7d", newLeftTarget,  newRightTarget);
-                telemetry.addData("Currently at",  " at %7d :%7d",
-                                            leftDrive.getCurrentPosition(), rightDrive.getCurrentPosition());
+                telemetry.addData("Currently at",  " at %7d :%7d :%7d :%7d",
+                                            leftDrive.getCurrentPosition(), rightDrive.getCurrentPosition(),frontleftdrive.getCurrentPosition(),frontrightdrive.getCurrentPosition());
                 telemetry.update();
             }
 

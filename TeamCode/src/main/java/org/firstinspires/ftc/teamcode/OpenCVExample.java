@@ -26,7 +26,7 @@ import org.openftc.easyopencv.OpenCvPipeline;
 import org.openftc.easyopencv.OpenCvWebcam;
 
 @TeleOp(name="TestOpenCV", group="CameraTest")
-//@Disabled
+@Disabled
 public class OpenCVExample extends LinearOpMode {
 
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera

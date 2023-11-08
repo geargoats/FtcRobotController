@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.IMU;
@@ -14,7 +15,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngularVelocity;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 
 @Autonomous(name="Robot: red_frontstage_auto_drive", group="Red")
-//@Disabled
+@Disabled
 public class red_frontstage_auto_drive extends LinearOpMode {
 
     /* Declare OpMode members. */
@@ -143,8 +144,10 @@ public class red_frontstage_auto_drive extends LinearOpMode {
 */
         turnToHeading( TURN_SPEED, 0);               // Turn  CW to -90 Degrees
         holdHeading( TURN_SPEED, 0, 0.5);   // Hold -90 Deg heading for a 1/2 second
-        driveStrafe(STRAFE_SPEED,96, 0);    // Strafe in Reverse 48" (should return to approx. staring position)
+        driveStrafe(STRAFE_SPEED,85, 0);    // Strafe in Reverse 48" (should return to approx. staring position)
 
+        driveStraight(DRIVE_SPEED,-7,0);
+//rock paper scissors is cool.(Dylan was here)
 
         telemetry.addData("Path", "Complete");
         telemetry.update();

@@ -29,6 +29,9 @@
 
 package org.firstinspires.ftc.teamcode;
 
+import android.graphics.Canvas;
+
+import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -39,9 +42,12 @@ import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDir
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.ExposureControl;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.GainControl;
+import org.firstinspires.ftc.robotcore.internal.camera.calibration.CameraCalibration;
 import org.firstinspires.ftc.vision.VisionPortal;
+import org.firstinspires.ftc.vision.VisionProcessor;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+import org.opencv.core.Mat;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -79,8 +85,8 @@ import java.util.concurrent.TimeUnit;
  *
  */
 
-@TeleOp(name="Omni Drive To AprilTag", group = "Concept")
-//@Disabled
+@TeleOp(name="Omni Drive To AprilTag", group = "Example")
+@Disabled
 public class RobotAutoDriveToAprilTagOmni extends LinearOpMode
 {
     // Adjust these numbers to suit your robot.
@@ -107,6 +113,28 @@ public class RobotAutoDriveToAprilTagOmni extends LinearOpMode
     private VisionPortal visionPortal;               // Used to manage the video source.
     private AprilTagProcessor aprilTag;              // Used for managing the AprilTag detection process.
     private AprilTagDetection desiredTag = null;     // Used to hold the data for a detected AprilTag
+    //Test Image Processing
+/*    class MyVisionProcessor implements VisionProcessor{
+        @Override
+        public void init(int width, int height, CameraCalibration Calibration){}
+
+        @Override
+        public Object processFrame(Mat frame, long captureTimeNanos){
+            return null;
+        }
+
+        @Override
+        public void onDrawFrame(Canvas canvas, int onscreenWidth, int onscreenHeight, float scaleBmpPxToCanvasPx, float scaleCanvasDensity, Object userContext) {
+            return null;
+        }
+
+        @Override
+        public void onDrawFrame(Canvas canvas, int onscreenWidth, float scaleBmpPxToCanvasPx, float scaleCanvasDensity, Object userContext){}
+    }
+
+    MyVisionProcessor customVisionProcessor = new MyVisionProcessor();
+    WebcamName camera = hardwareMap.get(WebcamName.class, "Webcam 1");
+    VisionPortal visionPortal_OpenCV = VisionPortal.easyCreateWithDefaults(camera, customVisionProcessor);*/
 
     @Override public void runOpMode()
     {
@@ -121,10 +149,10 @@ public class RobotAutoDriveToAprilTagOmni extends LinearOpMode
         // Initialize the hardware variables. Note that the strings used here as parameters
         // to 'get' must match the names assigned during the robot configuration.
         // step (using the FTC Robot Controller app on the phone).
-        leftFrontDrive  = hardwareMap.get(DcMotor.class, "drivelf");
-        rightFrontDrive = hardwareMap.get(DcMotor.class, "driverf");
-        leftBackDrive  = hardwareMap.get(DcMotor.class, "drivelb");
-        rightBackDrive = hardwareMap.get(DcMotor.class, "driverb");
+        leftBackDrive  = hardwareMap.get(DcMotor.class, "left_back_drive");
+        leftFrontDrive = hardwareMap.get(DcMotor.class, "left_front_drive");
+        rightBackDrive = hardwareMap.get(DcMotor.class, "right_front_drive");
+        rightFrontDrive = hardwareMap.get(DcMotor.class, "right_back_drive");
 
         // To drive forward, most robots need the motor on one side to be reversed, because the axles point in opposite directions.
         // When run, this OpMode should start both motors driving forward. So adjust these two lines based on your first test drive.
@@ -147,6 +175,7 @@ public class RobotAutoDriveToAprilTagOmni extends LinearOpMode
         {
             targetFound = false;
             desiredTag  = null;
+
 
             // Step through the list of detected tags and look for a matching tag
             List<AprilTagDetection> currentDetections = aprilTag.getDetections();
@@ -296,3 +325,4 @@ public class RobotAutoDriveToAprilTagOmni extends LinearOpMode
         }
     }
 }
+
