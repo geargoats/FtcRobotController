@@ -137,8 +137,8 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     private DcMotor         rightFrontDrive  = null;
     private DcMotor         angleMotor = null;
     private IMU             imu         = null;      // Control/Expansion Hub IMU
-    private CRServo pixel_servo;
-    private CRServo pixel_servo_2;
+    private CRServo pixel_servo;// Right Front Pixel
+    private CRServo pixel_servo_left;//Left Front Pixel
     private TouchSensor linear_slide_back;
 
     private double          robotHeading  = 0;
@@ -195,12 +195,19 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
     // Decrease these numbers if the heading does not settle on the correct value (eg: very agile robot with omni wheels)
     static final double     P_TURN_GAIN            = 0.03;     // Larger is more responsive, but also less stable
     static final double     P_DRIVE_GAIN           = 0.03;     // Larger is more responsive, but also less stable
+    //  Set the GAIN constants to control the relationship between the measured position error, and how much power is
+    //  applied to the drive motors to correct the error for AprilTag
+    //  Drive = Error * Gain    Make these values smaller for smoother control, or larger for a more aggressive response.
+    final double SPEED_GAIN  =  0.02  ;   //  Forward Speed Control "Gain". eg: Ramp up to 50% power at a 25 inch error.   (0.50 / 25.0)
+    final double STRAFE_GAIN =  0.015 ;   //  Strafe Speed Control "Gain".  eg: Ramp up to 25% power at a 25 degree Yaw error.   (0.25 / 25.0)
+    final double TURN_GAIN   =  0.01  ;   //  Turn Control "Gain".  eg: Ramp up to 25% power at a 25 degree error. (0.25 / 25.0)
 
+    boolean targetFound     = false;    // Set to true when an AprilTag target is detected
 
    // @Override
     public void runOpMode() {
         pixel_servo = hardwareMap.get(CRServo.class, "pixel_holder");
-        pixel_servo_2 = hardwareMap.get(CRServo.class, "pixel_holder_2");
+        pixel_servo_left = hardwareMap.get(CRServo.class, "pixel_holder_2");
         sensorDistance = hardwareMap.get(DistanceSensor.class, "range");
 
 
@@ -278,10 +285,10 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
         }
         pixel_servo.setPower(-1);
-        pixel_servo_2.setPower(-1);
+        pixel_servo_left.setPower(-1);
         sleep(300);
         pixel_servo.setPower(1); //Hold Pixel Right Front
-        pixel_servo_2.setPower(1);// Hold Pixel Left Front
+        pixel_servo_left.setPower(1);// Hold Pixel Left Front
         angleMotor.setPower(0);
 
 
@@ -297,7 +304,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             te_detector();
             sleep(20);
         }
-        pixel_servo_2.setPower(-1);
+        pixel_servo_left.setPower(1);
         visionPortal.setProcessorEnabled(tfod, false);
         visionPortal.setProcessorEnabled(aprilTag, true);
 
@@ -320,7 +327,7 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
         if (DEBUG) {
             ElapsedTime holdTimer = new ElapsedTime();
             holdTimer.reset();
-            double holdTime = 20;
+            double holdTime = 2;
 
             // keep looping while we have time remaining.
             while (opModeIsActive() && (holdTimer.time() < holdTime)) {
@@ -328,6 +335,10 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
                 telemetryAprilTag();
                 telemetry.update();
             }
+        }
+
+        while(opModeIsActive()) {
+
         }
         // Step through each leg of the path,
         // Notes:   Reverse movement is obtained by setting a negative distance (not speed)
@@ -596,6 +607,43 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
         return Range.clip(headingError * proportionalGain, -1, 1);
     }
 
+
+    /**
+     * Move robot according to desired axes motions
+     * <p>
+     * Positive X is forward
+     * <p>
+     * Positive Y is strafe left
+     * <p>
+     * Positive Yaw is counter-clockwise
+     */
+    public void moveRobot_april(double x, double y, double yaw) {
+        // Calculate wheel powers.
+        double leftFrontPower    =  x -y -yaw;
+        double rightFrontPower   =  x +y +yaw;
+        double leftBackPower     =  x +y -yaw;
+        double rightBackPower    =  x -y +yaw;
+
+        // Normalize wheel powers to be less than 1.0
+        double max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
+        max = Math.max(max, Math.abs(leftBackPower));
+        max = Math.max(max, Math.abs(rightBackPower));
+
+        if (max > 1.0) {
+            leftFrontPower /= max;
+            rightFrontPower /= max;
+            leftBackPower /= max;
+            rightBackPower /= max;
+        }
+
+        // Send powers to the wheels.
+        leftFrontDrive.setPower(leftFrontPower);
+        rightFrontDrive.setPower(rightFrontPower);
+        leftBackDrive.setPower(leftBackPower);
+        rightBackDrive.setPower(rightBackPower);
+    }
+
+
     /**
      * This method takes separate drive (fwd/rev) and turn (right/left) requests,
      * combines them, and applies the appropriate speed commands to the left and right wheel motors.
@@ -863,29 +911,45 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
 
     private void left_pixel_place (){
         //Place code here
-        pixel_servo_2.setPower(1);
-        driveStraight(0.4,12,0);
+        pixel_servo_left.setPower(1);
+        driveStraight(0.4,16,0);
 //        driveStraight(0.5,24,90);
         turnToHeading(TURN_SPEED,30);
-        pixel_servo_2.setPower(-1);
-        driveStraight(DRIVE_SPEED,12,30);
+        pixel_servo_left.setPower(-1.0);
+        if (TE_color)   driveStraight(DRIVE_SPEED,9.5,30);
+        else     driveStraight(DRIVE_SPEED,8.5,30);
+        pixel_servo_left.setPower(-0.5);
         holdHeading(TURN_SPEED,30,0.4);
-        driveStraight(DRIVE_SPEED,-14,30);
+        driveStraight(DRIVE_SPEED,-9,30);
 //        holdHeading(DRIVE_SPEED,90,0.2);
-        turnToHeading(TURN_SPEED,-90);
-        holdHeading(DRIVE_SPEED,-90,0.2);
-        driveStrafe(STRAFE_SPEED,-48,-90);
+        if (pole_left) {
+            turnToHeading(TURN_SPEED, -90);
+            holdHeading(DRIVE_SPEED, -90, 0.2);
+            if(!TE_color) { ///If blue center straffe
+                driveStrafe(STRAFE_SPEED, -48, -90);
+            } else {
+                red_back_stage();
+            }
+        } else {
+            turnToHeading(TURN_SPEED, 90);
+            holdHeading(DRIVE_SPEED, 90, 0.2);
+            if(TE_color) { //IF red center Straffe
+                driveStrafe(STRAFE_SPEED, 48, 90);
+            } else {
+                blue_back_stage();
+            }
+        }
     }
     private void  center_pixel_place (){
-        //Place code here
-        pixel_servo_2.setPower(1);
+    /*    //Place code here
+        pixel_servo_left.setPower(1);
         driveStraight(0.4,14,0);
         if (pole_left){
             turnToHeading(TURN_SPEED,45);
             driveStrafe(STRAFE_SPEED,22,45);
             turnToHeading(TURN_SPEED,90);
             driveStrafe(0.4,16,90);
-            pixel_servo_2.setPower(-1);
+            pixel_servo_left.setPower(-1);
             driveStraight(DRIVE_SPEED,-4,90);
             driveStrafe(STRAFE_SPEED,16,90);
         } else {
@@ -893,30 +957,125 @@ public class AutoDriveByGyro_Linear_Apriltag_TFOD_Mechanam extends LinearOpMode 
             driveStrafe(STRAFE_SPEED,-22,-45);
             turnToHeading(TURN_SPEED,-90);
             driveStrafe(0.4,-16,-90);
-            pixel_servo_2.setPower(-1);
+            pixel_servo_left.setPower(-1);
             driveStraight(DRIVE_SPEED,-4,-90);
             driveStrafe(STRAFE_SPEED,-16,-90);
 
         }
-
-//        driveStraight(DRIVE_SPEED,29,0);
+*/
+        pixel_servo_left.setPower(0);
+        driveStraight(DRIVE_SPEED,28.5,0);
+        pixel_servo_left.setPower(-1);
+        driveStraight(DRIVE_SPEED,-10,0);
+        turnToHeading(TURN_SPEED,-90);
+        if (pole_left) { //Red Turn Right
+            if (TE_color) {//Red Back Stage
+                red_back_stage();
+            } else {
+                turnToHeading(turnSpeed, -90);
+            }
+        } else {
+            if (TE_color) { //Red Front Stage
+                turnToHeading(turnSpeed, 90);
+            }else { // Blue Back Stage
+                blue_back_stage();
+            }
+        }
     }
     private void right_pixel_place(){
         //Place code here
-        pixel_servo_2.setPower(1);
+        pixel_servo_left.setPower(1);
         driveStraight(0.4,14,0);
 //        driveStraight(0.5,24,90);
         turnToHeading(TURN_SPEED,-40);
         driveStrafe(STRAFE_SPEED,-1,-40);
-        pixel_servo_2.setPower(-1);
-        driveStraight(DRIVE_SPEED,12,-40);
+        pixel_servo_left.setPower(-1);
+        driveStraight(DRIVE_SPEED,12.5,-40);
         holdHeading(TURN_SPEED,-40,0.4);
         driveStraight(DRIVE_SPEED,-12,-40);
 //        holdHeading(DRIVE_SPEED,90,0.2);
-        turnToHeading(TURN_SPEED,-90);
-        holdHeading(DRIVE_SPEED,-90,0.2);
-        driveStrafe(STRAFE_SPEED,-48,-90);
+        if (pole_left) {
+            turnToHeading(TURN_SPEED, -90);
+            holdHeading(DRIVE_SPEED, -90, 0.2);
+            if(!TE_color) { ///If blue front stage
+                driveStrafe(STRAFE_SPEED, -48, -90);
+            } else { //Red Back Stage
+                red_back_stage();
+            }
+        } else {
+            turnToHeading(TURN_SPEED, 90);
+            holdHeading(DRIVE_SPEED, 90, 0.2);
+            if(TE_color) { //IF red front stage
+                driveStrafe(STRAFE_SPEED, 24, 90);
+            } else { //Blue back Stage
+                blue_back_stage();
+            }
+        }
+    }
+    private void red_back_stage ( ) {
+        //Do Something
+        driveStrafe(STRAFE_SPEED,14,-90);
+        driveStraight(DRIVE_SPEED,43,-90);
+    }
+
+    private void blue_back_stage () {
+        //Do Something
+
+
+
+        //doing something
 
     }
+
+   /* private void orient_on_red_apriltag(){
+        targetFound = false;
+        int find_tag = 7;
+        desiredTag  = null;
+        double  drive           = 0;        // Desired forward power/speed (-1 to +1)
+        double  strafe          = 0;        // Desired strafe power/speed (-1 to +1)
+        double  turn            = 0;        // Desired turning power/speed (-1 to +1)
+
+        // Step through the list of detected tags and look for a matching tag
+        List<AprilTagDetection> currentDetections = aprilTag.getDetections();
+        for (AprilTagDetection detection : currentDetections) {
+            // Look to see if we have size info on this tag.
+            if ((detection.id == find_tag) ) {
+                // Yes, we want to use this tag.
+                targetFound = true;
+                desiredTag = detection;
+                break;  // don't look any further.
+            } else {
+                // This tag is in the library, but we do not want to track it right now.
+                telemetry.addData("Skipping", "Tag ID %d is not desired", detection.id);
+            }
+        }
+        if (targetFound) {
+            telemetry.addData("Found", "ID %d (%s)", desiredTag.id, desiredTag.metadata.name);
+            telemetry.addData("Range",  "%5.1f inches", desiredTag.ftcPose.range);
+            telemetry.addData("Bearing","%3.0f degrees", desiredTag.ftcPose.bearing);
+            telemetry.addData("Yaw","%3.0f degrees", desiredTag.ftcPose.yaw);
+        } else {
+            telemetry.addData("\n>","Red 7 Apriltag not foundt\n");
+        }
+        double  rangeError      = (desiredTag.ftcPose.range - 26);
+        double  headingError    = (desiredTag.ftcPose.bearing - 17);
+        double  yawError        = (desiredTag.ftcPose.yaw - -17.0);
+
+        // Use the speed and turn "gains" to calculate how we want the robot to move.
+        drive  = Range.clip(rangeError * SPEED_GAIN, -DRIVE_SPEED, DRIVE_SPEED);
+        turn   = Range.clip(headingError * TURN_GAIN, -TURN_SPEED, TURN_SPEED) ;
+        strafe = Range.clip(-yawError * STRAFE_GAIN, -STRAFE_SPEED, STRAFE_SPEED);
+
+        telemetry.addData("Error", "rangeErr %5.1fin, headErr %3.0f deg, yawErr %3.0f deg", rangeError,headingError,yawError);
+        telemetry.addData("Auto","Drive %5.2f, Strafe %5.2f, Turn %5.2f ", drive, strafe, turn);
+        telemetry.update();
+
+        // Apply desired axes motions to the drivetrain.
+        if ((Math.abs(drive)+Math.abs(strafe)+Math.abs(turn))>0.1) moveRobot_april(drive, strafe, turn);
+        sleep(50);
+
+
+
+    }*/
 
 }

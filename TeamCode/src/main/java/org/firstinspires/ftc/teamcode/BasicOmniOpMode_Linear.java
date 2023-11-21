@@ -55,6 +55,7 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
     private CRServo drone_servo;
     private CRServo pixel_servo;
     private CRServo pixel_servo_2;
+    private CRServo pixel_graber;
     private DcMotor linear_motor;
     private DcMotor angleMotor;
     private TouchSensor linear_stop_btm;
@@ -67,8 +68,10 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
     boolean drone_delay = false;
     double delay_mili=getRuntime();
     boolean pixel_toggle = true;
-    boolean changed = false; //Outside of loop()
-    boolean changed2 = false; //Outside of loop()
+    boolean y_changed = false; //check to see if y is change
+    boolean x_changed = false; //Outside of loop()
+    boolean b_changed = false; // Check to see if b is changed
+    double grab_pwr = 0.5;//Set Grabber Power
 
 
 
@@ -87,6 +90,7 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         pixel_servo_2 = hardwareMap.get(CRServo.class, "pixel_holder_2");
         linear_motor = hardwareMap.get(DcMotor.class,"linear_motor");
         angleMotor = hardwareMap.get(DcMotor.class,"lift_Motor");
+        pixel_graber = hardwareMap.get(CRServo.class,"pixel_graber");
         //linear_stop_btm = hardwareMap.get(TouchSensor.class, "linear_stop");
         linear_slide_back = hardwareMap.get(TouchSensor.class, "linear_stop_back"); //Tells you when you hit the back angle
         linear_slide_front = hardwareMap.get(TouchSensor.class, "linear_stop_front");//Tells you when you hit the front angle
@@ -171,6 +175,12 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
             rightBackPower  = gamepad1.b ? 1.0 : 0.0;  // B gamepad
             */
 
+            if (gamepad1.b && !b_changed){
+                if(pixel_graber.getPower()==-grab_pwr) pixel_graber.setPower(grab_pwr);
+                else pixel_graber.setPower(-grab_pwr);
+                b_changed = true;
+            }else if (!gamepad1.b) b_changed = false;
+
             // Send calculated power to wheels
             leftFrontPower *=robot_speed;
             rightBackPower *=robot_speed;
@@ -187,16 +197,16 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
             telemetry.addData("Back  left/Right", "%4.2f, %4.2f", leftBackPower, rightBackPower);
             telemetry.addData("Angle Encoder Value", "%d",angleMotor.getCurrentPosition());
             telemetry.update();
-            if(gamepad1.y && !changed) {
-                if(pixel_servo.getPower() == -1) pixel_servo.setPower(1);
-                else pixel_servo.setPower(-1);
-                changed = true;
-            } else if(!gamepad1.y) changed = false;
-            if(gamepad1.x && !changed2) {
+            if(gamepad1.y && !y_changed) {
+                if(pixel_servo.getPower() == -1.0) pixel_servo.setPower(1.0);
+                else pixel_servo.setPower(-1.0);
+                y_changed = true;
+            } else if(!gamepad1.y) y_changed = false;
+            if(gamepad1.x && !x_changed) {
                 if(pixel_servo_2.getPower() == -1) pixel_servo_2.setPower(1);
                 else pixel_servo_2.setPower(-1);
-                changed2 = true;
-            } else if(!gamepad1.x) changed2 = false;
+                x_changed = true;
+            } else if(!gamepad1.x) x_changed = false;
             if (gamepad1.a) {
                 if (delay_mili+1 < getRuntime()){
                     drone_servo.setPower(-1);
